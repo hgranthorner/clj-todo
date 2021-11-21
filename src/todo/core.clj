@@ -27,13 +27,23 @@
       (.addElement model k))
     model))
 
+(defn- set-notes [todos event]
+  (let [listbox (.getSource event)
+        selected-todo (ss/selection listbox)
+        notes (select-first (ss/to-root listbox) :#notes)
+        new-note-text (:notes (todos selected-todo))]
+    (ss/config! notes :text new-note-text)))
+
 (defn- create-widgets
   "Return widgets."
   []
   (let
-   [list (ss/listbox :model (keys (:todos @*state))
+   [list (ss/listbox :id :todo-list
+                     :model (keys (:todos @*state))
                      :maximum-size [(/ width 2) :by height]
-                     :listen [:selection (fn [x] (println (ss/selection (.getSource x))))])
+                     :listen [:selection
+                              (fn [x]
+                                (set-notes (:todos @*state) x))])
     add-text (ss/text :id :add-text
                       :text ""
                       :editable? true
@@ -95,4 +105,5 @@
   ss/pack!
   (show-events (ss/listbox))
   (type (ss/text))
+  (reset! *state {:todos {"asdf" {:notes "abcdef"}}})
   @*state)

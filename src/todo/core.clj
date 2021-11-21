@@ -27,9 +27,8 @@
       (.addElement model k))
     model))
 
-(defn- set-notes [todos event]
-  (let [listbox (.getSource event)
-        selected-todo (ss/selection listbox)
+(defn- set-notes [todos listbox]
+  (let [selected-todo (ss/selection listbox)
         notes (select-first (ss/to-root listbox) :#notes)
         new-note-text (:notes (todos selected-todo))]
     (ss/config! notes :text new-note-text)))
@@ -43,7 +42,9 @@
                      :maximum-size [(/ width 2) :by height]
                      :listen [:selection
                               (fn [x]
-                                (set-notes (:todos @*state) x))])
+                                (let [listbox (.getSource x)]
+                                  (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
+                                  (set-notes (:todos @*state) listbox)))])
     add-text (ss/text :id :add-text
                       :text ""
                       :editable? true
@@ -53,10 +54,15 @@
                         :editable? false
                         :maximum-size [(/ width 2) :by 0])
     notes (ss/text :id :notes
-                   :editable? true
+                   :editable? (not (nil? (ss/selection list)))
                    :multi-line? true
                    :border (MetalBorders$TextFieldBorder.)
-                   :listen [:key-typed (fn [x] (println x))])
+                   :listen [:key-released
+                            (fn [x]
+                              (let [frame (ss/to-root (.getSource x))
+                                    n (select-first frame :#notes)
+                                    selected-note (ss/selection (select-first frame :#todo-list))]
+                                (swap! *state #(assoc-in % [:todos selected-note :notes] (.getText n)))))])
     add-fn (fn [_]
              (let [todo (ss/config add-text :text)
                    todos (:todos @*state)]
@@ -102,8 +108,9 @@
    (select-first *frame :#notes)
    :listen [:key-pressed (fn [_] (println "from config2"))])
   (-main)
+  (ss/selection (select-first *frame :#todo-list))
   ss/pack!
   (show-events (ss/listbox))
   (type (ss/text))
-  (reset! *state {:todos {"asdf" {:notes "abcdef"}}})
+  (reset! *state {:todos {}})
   @*state)

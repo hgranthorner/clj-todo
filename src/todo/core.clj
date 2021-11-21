@@ -2,6 +2,7 @@
   (:require
    [seesaw.core :as ss]
    [clojure.reflect :as reflect]
+   [clojure.edn :as edn]
    [seesaw.dev :refer (show-events show-options)])
   (:import [javax.swing DefaultListModel ListModel]
            [javax.swing.plaf.metal MetalBorders$TextFieldBorder]))
@@ -14,14 +15,16 @@
 (def height 400)
 
 (defn- select-first
-  "Helper for selecting the first element by class."
+  "Helper for selecting the first element by class or id."
   [frame ^clojure.lang.Keyword kw]
   (let [result (ss/select frame [kw])]
     (if (seq? result)
       (first result)
       result)))
 
-(defn- create-list-model ^ListModel [^clojure.lang.PersistentArrayMap todos]
+(defn- create-list-model
+ "Generates a ListModel when given a todo map." 
+  ^ListModel [^clojure.lang.PersistentArrayMap todos]
   (let [model (DefaultListModel.)]
     (doseq [k (keys todos)]
       (.addElement model k))
@@ -32,6 +35,11 @@
         notes (select-first (ss/to-root listbox) :#notes)
         new-note-text (:notes (todos selected-todo))]
     (ss/config! notes :text new-note-text)))
+
+(defn- get-selected-todo 
+  "When given an event object, returns the currently selected todo in the app."
+  [event]
+  (ss/selection (select-first (ss/to-root (.getSource event)) :#todo-list)))
 
 (defn- create-widgets
   "Return widgets."
@@ -61,8 +69,8 @@
                             (fn [x]
                               (let [frame (ss/to-root (.getSource x))
                                     n (select-first frame :#notes)
-                                    selected-note (ss/selection (select-first frame :#todo-list))]
-                                (swap! *state #(assoc-in % [:todos selected-note :notes] (.getText n)))))])
+                                    selected-todo (get-selected-todo x)]
+                                (swap! *state #(assoc-in % [:todos selected-todo :notes] (.getText n)))))])
     add-fn (fn [_]
              (let [todo (ss/config add-text :text)
                    todos (:todos @*state)]
@@ -73,6 +81,11 @@
                  (ss/config! error-text :text (str "Error: there is already a todo named " todo)))))
     add-btn (ss/button :listen [:action add-fn] :text "Add")
     h-panel (ss/horizontal-panel :items [add-text add-btn])
+    complete-button (ss/button :text "Complete" 
+                               :listen [:action (fn [x]
+                                                    (swap! *state
+                                                           #(assoc-in % [:todos (get-selected-todo x) :complete?] true)))])
+    save-button (ss/button :text "Save" :listen [:action (fn [_] (spit "data.edn" @*state))])
     frame (ss/frame
            :minimum-size  [width :by height]
            :title "To Dos"
@@ -82,7 +95,9 @@
                                      :items [h-panel
                                              error-text
                                              (ss/scrollable list)])
-                                    notes])
+                                    (ss/vertical-panel
+                                     :items [notes
+                                             (ss/horizontal-panel :items [complete-button save-button])])])
            :on-close :dispose)]
     {:list list
      :add-fn add-fn
@@ -94,9 +109,12 @@
      :frame frame}))
 
 (defn -main
-  "Runs the GUI."
+  "Runs the GUI and hydrates the state."
   [& _]
-  (let [{:keys [frame]} (create-widgets)]
+  (ss/native!)
+  (reset! *state (edn/read-string (slurp "data.edn")))
+  (let
+   [{:keys [frame]} (create-widgets)]
     (def ^:dynamic *frame frame)
     (-> frame
         ss/pack!

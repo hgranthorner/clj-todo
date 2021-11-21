@@ -57,15 +57,14 @@
     frame (ss/frame
            :size  [width :by height]
            :title "To Dos"
-           :content (ss/horizontal-panel
-                     :maximum-size [(/ width 2) :by height]
-                     :items
-                     [(ss/vertical-panel
-                       :maximum-size [(/ width 2) :by height]
-                       :items [h-panel
-                               error-text
-                               (ss/scrollable list)])
-                      notes])
+           :content (ss/grid-panel :columns 2
+                                   :items
+                                   [(ss/vertical-panel
+                                     :maximum-size [(/ width 2) :by height]
+                                     :items [h-panel
+                                             error-text
+                                             (ss/scrollable list)])
+                                    notes])
            :on-close :dispose)]
     {:list list
      :add-fn add-fn
@@ -82,6 +81,7 @@
   (let [{:keys [frame]} (create-widgets)]
     (def ^:dynamic *frame frame)
     (-> frame
+        ss/pack!
         (ss/move-to! 100 0)
         ss/show!)))
 

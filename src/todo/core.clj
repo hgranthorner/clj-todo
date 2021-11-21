@@ -1,6 +1,7 @@
 (ns todo.core
   (:require
    [seesaw.core :as ss]
+   [clojure.reflect :as reflect]
    [seesaw.dev :refer (show-events show-options)])
   (:import [javax.swing DefaultListModel ListModel]
            [javax.swing.plaf.metal MetalBorders$TextFieldBorder]))
@@ -30,15 +31,17 @@
   "Return widgets."
   []
   (let
-   [list (ss/listbox :model
-                     (mapv keys (:todos @*state)))
+   [list (ss/listbox :model (keys (:todos @*state))
+                     :maximum-size [(/ width 2) :by height]
+                     :listen [:selection (fn [x] (println (ss/selection (.getSource x))))])
     add-text (ss/text :id :add-text
                       :text ""
-                      :editable? true)
+                      :editable? true
+                      :maximum-size [(/ width 2) :by 30])
     error-text (ss/text :id :error-text
                         :text ""
                         :editable? false
-                        :minimum-size [0 :by 0])
+                        :maximum-size [(/ width 2) :by 0])
     notes (ss/text :id :notes
                    :editable? true
                    :multi-line? true
@@ -55,12 +58,11 @@
     add-btn (ss/button :listen [:action add-fn] :text "Add")
     h-panel (ss/horizontal-panel :items [add-text add-btn])
     frame (ss/frame
-           :size  [width :by height]
+           :minimum-size  [width :by height]
            :title "To Dos"
            :content (ss/grid-panel :columns 2
                                    :items
                                    [(ss/vertical-panel
-                                     :maximum-size [(/ width 2) :by height]
                                      :items [h-panel
                                              error-text
                                              (ss/scrollable list)])
@@ -91,6 +93,6 @@
    :listen [:key-pressed (fn [_] (println "from config2"))])
   (-main)
   ss/pack!
-  (show-options (ss/vertical-panel))
+  (show-events (ss/listbox))
   (type (ss/text))
   @*state)

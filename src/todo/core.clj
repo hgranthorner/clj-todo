@@ -27,7 +27,7 @@
 (defn- render-todo-list
   "Sorts the todo list, putting completed todos at the bottom. Then sorts todos alphabetically by title."
   [todos]
-  (let [sorted-todos (sort-by (fn [[k v]] [(:complete? v) k]) todos)]
+  (let [sorted-todos (sort-by (fn [[k v]] [(get v :complete?) k]) todos)]
     (map (fn [[name value]]
            (if (:complete? value)
              (str "COMPLETE - " name)

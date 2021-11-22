@@ -2,6 +2,8 @@
   (:require
    [seesaw.core :as ss]
    [clojure.reflect :as reflect]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.edn :as edn]
    [seesaw.dev :refer (show-events show-options)])
   (:import [javax.swing DefaultListModel ListModel]
@@ -25,32 +27,58 @@
 (defn- create-list-model
  "Generates a ListModel when given a todo map." 
   ^ListModel [^clojure.lang.PersistentArrayMap todos]
-  (let [model (DefaultListModel.)]
-    (doseq [k (keys todos)]
+  (let [model (DefaultListModel.)
+        elements (map
+                  (fn [[k v]]
+                    (if (:complete? v)
+                      (str "COMPLETE - " k)
+                      k)) todos)]
+    (println elements)
+    (doseq [k elements]
       (.addElement model k))
     model))
 
+(defn- remove-complete
+  "Remove the 'COMPLETE - ' prefix for completed todos."
+  [^String s]
+  (str/replace s "COMPLETE - " ""))
+
 (defn- set-notes [todos listbox]
-  (let [selected-todo (ss/selection listbox)
+  (let [selected-todo (remove-complete (ss/selection listbox))
         notes (select-first (ss/to-root listbox) :#notes)
         new-note-text (:notes (todos selected-todo))]
     (ss/config! notes :text new-note-text)))
 
-(defn- get-selected-todo 
+(defn- get-source 
+  "Gets the source widget for the event."
+  [x]
+  (.getSource x))
+
+(comment
+  (remove-complete "abc")
+  (remove-complete "COMPLETE - abc")
+  )
+
+(defn- get-selected-todo
   "When given an event object, returns the currently selected todo in the app."
   [event]
-  (ss/selection (select-first (ss/to-root (.getSource event)) :#todo-list)))
+  (-> event
+      get-source
+      ss/to-root
+      (select-first :#todo-list)
+      ss/selection
+      remove-complete))
 
 (defn- create-widgets
   "Return widgets."
   []
   (let
    [list (ss/listbox :id :todo-list
-                     :model (keys (:todos @*state))
+                     :model (create-list-model (:todos @*state))
                      :maximum-size [(/ width 2) :by height]
                      :listen [:selection
                               (fn [x]
-                                (let [listbox (.getSource x)]
+                                (let [listbox (get-source x)]
                                   (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
                                   (set-notes (:todos @*state) listbox)))])
     add-text (ss/text :id :add-text
@@ -67,7 +95,7 @@
                    :border (MetalBorders$TextFieldBorder.)
                    :listen [:key-released
                             (fn [x]
-                              (let [frame (ss/to-root (.getSource x))
+                              (let [frame (ss/to-root (get-source x))
                                     n (select-first frame :#notes)
                                     selected-todo (get-selected-todo x)]
                                 (swap! *state #(assoc-in % [:todos selected-todo :notes] (.getText n)))))])
@@ -83,8 +111,9 @@
     h-panel (ss/horizontal-panel :items [add-text add-btn])
     complete-button (ss/button :text "Complete" 
                                :listen [:action (fn [x]
-                                                    (swap! *state
-                                                           #(assoc-in % [:todos (get-selected-todo x) :complete?] true)))])
+                                                    (swap!
+                                                     *state
+                                                     #(assoc-in % [:todos (get-selected-todo x) :complete?] true)))])
     save-button (ss/button :text "Save" :listen [:action (fn [_] (spit "data.edn" @*state))])
     frame (ss/frame
            :minimum-size  [width :by height]
@@ -112,7 +141,8 @@
   "Runs the GUI and hydrates the state."
   [& _]
   (ss/native!)
-  (reset! *state (edn/read-string (slurp "data.edn")))
+  (when (.exists (io/file "data.edn"))
+    (reset! *state (edn/read-string (slurp "data.edn"))))
   (let
    [{:keys [frame]} (create-widgets)]
     (def ^:dynamic *frame frame)

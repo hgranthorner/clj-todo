@@ -1,10 +1,11 @@
 (ns todo.core
-  (:require
-   [seesaw.core :as ss]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [clojure.edn :as edn]
-   [seesaw.dev :refer (show-events show-options)])
+  (:require [todo.events :as e]
+            [clojure.core.async :as async :refer (chan dropping-buffer put!)]
+            [seesaw.core :as ss]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [clojure.edn :as edn]
+            [seesaw.dev :refer (show-events show-options)])
   (:import [javax.swing DefaultListModel ListModel]
            [javax.swing.plaf.metal MetalBorders$TextFieldBorder]))
 
@@ -82,13 +83,14 @@
 
 (defn- create-widgets
   "Return widgets."
-  []
+  [channel]
   (let
    [list (ss/listbox :id :todo-list
                      :model (create-list-model (:todos @*state))
                      :maximum-size [(/ width 2) :by height]
                      :listen [:selection
                               (fn [x]
+                                (put! channel [:todo-selected])
                                 (let [listbox (get-source x)]
                                   (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
                                   (set-notes (:todos @*state) listbox)))])
@@ -155,7 +157,8 @@
   (when (.exists (io/file "data.edn"))
     (reset! *state (edn/read-string (slurp "data.edn"))))
   (let
-   [{:keys [frame]} (create-widgets)]
+   [channel (chan (dropping-buffer 100))
+    {:keys [frame]} (create-widgets channel)]
     (def ^:dynamic *frame frame)
     (-> frame
         ss/pack!

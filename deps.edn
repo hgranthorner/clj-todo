@@ -1,2 +1,3 @@
 {:paths ["src"]
- :deps {seesaw/seesaw {:mvn/version "1.5.0"}}}
+ :deps {seesaw/seesaw {:mvn/version "1.5.0"}
+        org.clojure/core.async {:mvn/version "1.4.627"}}}

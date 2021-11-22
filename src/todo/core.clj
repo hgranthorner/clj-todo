@@ -57,10 +57,11 @@
   (str/replace s "COMPLETE - " ""))
 
 (defn- set-notes [todos listbox]
-  (let [selected-todo (remove-complete (ss/selection listbox))
-        notes (select-first (ss/to-root listbox) :#notes)
-        new-note-text (:notes (todos selected-todo))]
-    (ss/config! notes :text new-note-text)))
+  (when (ss/selection listbox)
+    (let [selected-todo (remove-complete (ss/selection listbox))
+          notes (select-first (ss/to-root listbox) :#notes)
+          new-note-text (:notes (todos selected-todo))]
+      (ss/config! notes :text new-note-text))))
 
 (defn- get-source
   "Gets the source widget for the event."
@@ -89,14 +90,14 @@
 
 (defn- create-widgets
   "Return widgets."
-  [channel]
+  [out-channel]
   (let
    [list (ss/listbox :id :todo-list
                      :model (create-list-model (:todos @*state))
                      :maximum-size [(/ width 2) :by height]
                      :listen [:selection
                               (fn [x]
-                                (put! channel [:todo-selected])
+                                (put! out-channel [:todo-selected {:event x :state *state}])
                                 (let [listbox (get-source x)]
                                   (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
                                   (set-notes (:todos @*state) listbox)))])
@@ -114,11 +115,13 @@
                    :border (MetalBorders$TextFieldBorder.)
                    :listen [:key-released
                             (fn [x]
+                            (put! out-channel [:note-written {:event x :state *state}])
                               (let [frame (get-frame x)
                                     n (select-first frame :#notes)
                                     selected-todo (get-selected-todo x)]
                                 (swap! *state #(assoc-in % [:todos selected-todo :notes] (.getText n)))))])
-    add-fn (fn [_]
+    add-fn (fn [x]
+             (put! out-channel [:add-note {:event x :state *state}])
              (let [todo (ss/config add-text :text)
                    todos (:todos @*state)]
                (if-not (contains? todos todo)
@@ -130,6 +133,7 @@
     h-panel (ss/horizontal-panel :items [add-text add-btn])
     complete-button (ss/button :text "Complete"
                                :listen [:action (fn [x]
+                                                  (put! out-channel {:event x :state *state})
                                                   (swap!
                                                    *state
                                                    #(assoc-in % [:todos (get-selected-todo x) :complete?] true))
@@ -165,8 +169,9 @@
   (when (.exists (io/file "data.edn"))
     (reset! *state (edn/read-string (slurp "data.edn"))))
   (let
-   [channel (chan (dropping-buffer 100))
-    {:keys [frame]} (create-widgets channel)]
+   [event-channel (chan (dropping-buffer 100))
+    update-channel (chan (dropping-buffer 100))
+    {:keys [frame] :as widgets} (create-widgets event-channel)]
     (def ^:dynamic *frame frame)
     (-> frame
         ss/pack!

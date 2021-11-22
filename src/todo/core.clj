@@ -71,12 +71,18 @@
   (remove-complete "abc")
   (remove-complete "COMPLETE - abc"))
 
+(defn- get-frame
+  "Gets the frame from an event."
+  [event]
+  (-> event
+      get-source
+      ss/to-root))
+
 (defn- get-selected-todo
   "When given an event object, returns the currently selected todo in the app."
   [event]
   (-> event
-      get-source
-      ss/to-root
+      get-frame
       (select-first :#todo-list)
       ss/selection
       remove-complete))
@@ -108,7 +114,7 @@
                    :border (MetalBorders$TextFieldBorder.)
                    :listen [:key-released
                             (fn [x]
-                              (let [frame (ss/to-root (get-source x))
+                              (let [frame (get-frame x)
                                     n (select-first frame :#notes)
                                     selected-todo (get-selected-todo x)]
                                 (swap! *state #(assoc-in % [:todos selected-todo :notes] (.getText n)))))])
@@ -126,7 +132,9 @@
                                :listen [:action (fn [x]
                                                   (swap!
                                                    *state
-                                                   #(assoc-in % [:todos (get-selected-todo x) :complete?] true)))])
+                                                   #(assoc-in % [:todos (get-selected-todo x) :complete?] true))
+                                                  (.setModel (select-first (get-frame x) :#todo-list)
+                                                             (create-list-model (:todos @*state))))])
     save-button (ss/button :text "Save" :listen [:action (fn [_] (spit "data.edn" @*state))])
     frame (ss/frame
            :minimum-size  [width :by height]

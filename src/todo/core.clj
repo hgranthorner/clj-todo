@@ -1,7 +1,6 @@
 (ns todo.core
   (:require
    [seesaw.core :as ss]
-   [clojure.reflect :as reflect]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.edn :as edn]
@@ -24,16 +23,29 @@
       (first result)
       result)))
 
+(defn- render-todo-list
+  "Sorts the todo list, putting completed todos at the bottom. Then sorts todos alphabetically by title."
+  [todos]
+  (let [sorted-todos (sort-by (fn [[k v]] [(:complete? v) k]) todos)]
+    (map (fn [[name value]]
+           (if (:complete? value)
+             (str "COMPLETE - " name)
+             name))
+         sorted-todos)))
+
+(comment
+  (let [todos {"todo" {:notes "I need to do this thing.\n\nI did it!", :complete? true}
+               "" {:notes ""}
+               "another todo" {:notes "I'm not done yet!"}
+               "asdfasdf" {:notes "asdfasd", :complete? true}}]
+    (render-todo-list todos))
+  )
+
 (defn- create-list-model
- "Generates a ListModel when given a todo map." 
+  "Generates a ListModel when given a todo map."
   ^ListModel [^clojure.lang.PersistentArrayMap todos]
   (let [model (DefaultListModel.)
-        elements (map
-                  (fn [[k v]]
-                    (if (:complete? v)
-                      (str "COMPLETE - " k)
-                      k)) todos)]
-    (println elements)
+        elements (render-todo-list todos)]
     (doseq [k elements]
       (.addElement model k))
     model))
@@ -49,15 +61,14 @@
         new-note-text (:notes (todos selected-todo))]
     (ss/config! notes :text new-note-text)))
 
-(defn- get-source 
+(defn- get-source
   "Gets the source widget for the event."
   [x]
   (.getSource x))
 
 (comment
   (remove-complete "abc")
-  (remove-complete "COMPLETE - abc")
-  )
+  (remove-complete "COMPLETE - abc"))
 
 (defn- get-selected-todo
   "When given an event object, returns the currently selected todo in the app."
@@ -109,11 +120,11 @@
                  (ss/config! error-text :text (str "Error: there is already a todo named " todo)))))
     add-btn (ss/button :listen [:action add-fn] :text "Add")
     h-panel (ss/horizontal-panel :items [add-text add-btn])
-    complete-button (ss/button :text "Complete" 
+    complete-button (ss/button :text "Complete"
                                :listen [:action (fn [x]
-                                                    (swap!
-                                                     *state
-                                                     #(assoc-in % [:todos (get-selected-todo x) :complete?] true)))])
+                                                  (swap!
+                                                   *state
+                                                   #(assoc-in % [:todos (get-selected-todo x) :complete?] true)))])
     save-button (ss/button :text "Save" :listen [:action (fn [_] (spit "data.edn" @*state))])
     frame (ss/frame
            :minimum-size  [width :by height]

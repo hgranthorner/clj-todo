@@ -2,11 +2,11 @@
 
 (defmulti handle-event first)
 
-(defmethod handle-event ::todo-selected [_]
-  (println "Selected todo!"))
+(defmethod handle-event ::todo-selected [[_ {:keys [selected-todo]}]]
+  (println "Selected todo!" selected-todo))
 
-(defmethod handle-event ::note-written [_]
-  (println "note written4"))
+(defmethod handle-event ::note-written [[_ {:keys [note]}]]
+  (println "note written4" note))
 
-(defmethod handle-event ::add-note [_]
-  (println "note added"))
+(defmethod handle-event ::note-added [[_ {:keys [new-note]}]]
+  (println "note added" new-note))

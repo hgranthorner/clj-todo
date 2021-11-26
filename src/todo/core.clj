@@ -104,7 +104,7 @@
                      :listen [:selection
                               (fn [x]
                                 (when-not (.getValueIsAdjusting x)
-                                  (put! out-channel [::e/todo-selected {:event x :state *state}])
+                                  (put! out-channel [::e/todo-selected {:event x :state *state :selected-todo (ss/selection (get-source x))}])
                                   (let [listbox (get-source x)]
                                     (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
                                     (set-notes (:todos @*state) listbox))))])
@@ -122,15 +122,15 @@
                    :border (MetalBorders$TextFieldBorder.)
                    :listen [:key-released
                             (fn [x]
-                            (put! out-channel [::e/note-written {:event x :state *state}])
                               (let [frame (get-frame x)
                                     n (select-first frame :#notes)
                                     selected-todo (get-selected-todo x)]
+                                (put! out-channel [::e/note-written {:event x :state *state :note (.getText n)}])
                                 (swap! *state #(assoc-in % [:todos selected-todo :notes] (.getText n)))))])
     add-fn (fn [x]
-             (put! out-channel [::e/add-note {:event x :state *state}])
              (let [todo (ss/config add-text :text)
                    todos (:todos @*state)]
+               (put! out-channel [::e/note-added {:event x :state *state :new-note todo}])
                (if-not (contains? todos todo)
                  (do
                    (swap! *state #(assoc % :todos (conj todos [todo {:notes ""}])))
@@ -191,9 +191,10 @@
 
 (comment
   (ss/config!
-   (select-first *frame :#notes)
+   (select-first *frame :#todo-list)
    :listen [:key-pressed (fn [_] (println "from config2"))])
   (-main)
+  (:todos @*state)
   (ss/selection (select-first *frame :#todo-list))
   ss/pack!
   (show-events (ss/listbox))

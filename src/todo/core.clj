@@ -1,17 +1,18 @@
 (ns todo.core
   (:require [todo.events :as e]
-            [clojure.core.async :as async :refer (chan dropping-buffer put!)]
+            [clojure.core.async :as async :refer (chan dropping-buffer go-loop put! <!)]
             [seesaw.core :as ss]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.edn :as edn]
+            [clojure.spec.alpha :as s]
             [seesaw.dev :refer (show-events show-options)])
   (:import [javax.swing DefaultListModel ListModel]
            [javax.swing.plaf.metal MetalBorders$TextFieldBorder]))
 
 (defonce ^{:doc "Application state."}
   *state
-  (atom {:todos {}}))
+  (atom {:todos {} :selected-todo nil}))
 
 (def width  800)
 (def height 400)
@@ -88,6 +89,11 @@
       ss/selection
       remove-complete))
 
+(comment
+  (declare -main)
+  (-main)
+  )
+
 (defn- create-widgets
   "Return widgets."
   [out-channel]
@@ -97,10 +103,11 @@
                      :maximum-size [(/ width 2) :by height]
                      :listen [:selection
                               (fn [x]
-                                (put! out-channel [:todo-selected {:event x :state *state}])
-                                (let [listbox (get-source x)]
-                                  (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
-                                  (set-notes (:todos @*state) listbox)))])
+                                (when-not (.getValueIsAdjusting x)
+                                  (put! out-channel [::e/todo-selected {:event x :state *state}])
+                                  (let [listbox (get-source x)]
+                                    (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
+                                    (set-notes (:todos @*state) listbox))))])
     add-text (ss/text :id :add-text
                       :text ""
                       :editable? true
@@ -115,13 +122,13 @@
                    :border (MetalBorders$TextFieldBorder.)
                    :listen [:key-released
                             (fn [x]
-                            (put! out-channel [:note-written {:event x :state *state}])
+                            (put! out-channel [::e/note-written {:event x :state *state}])
                               (let [frame (get-frame x)
                                     n (select-first frame :#notes)
                                     selected-todo (get-selected-todo x)]
                                 (swap! *state #(assoc-in % [:todos selected-todo :notes] (.getText n)))))])
     add-fn (fn [x]
-             (put! out-channel [:add-note {:event x :state *state}])
+             (put! out-channel [::e/add-note {:event x :state *state}])
              (let [todo (ss/config add-text :text)
                    todos (:todos @*state)]
                (if-not (contains? todos todo)
@@ -133,7 +140,7 @@
     h-panel (ss/horizontal-panel :items [add-text add-btn])
     complete-button (ss/button :text "Complete"
                                :listen [:action (fn [x]
-                                                  (put! out-channel {:event x :state *state})
+                                                  (put! out-channel [::e/complete-task {:event x :state *state}])
                                                   (swap!
                                                    *state
                                                    #(assoc-in % [:todos (get-selected-todo x) :complete?] true))
@@ -172,6 +179,10 @@
    [event-channel (chan (dropping-buffer 100))
     update-channel (chan (dropping-buffer 100))
     {:keys [frame] :as widgets} (create-widgets event-channel)]
+    (go-loop []
+      (e/handle-event (<! event-channel))
+      ; Need to feed result of handle-event to update-channel
+      (recur))
     (def ^:dynamic *frame frame)
     (-> frame
         ss/pack!
@@ -187,5 +198,5 @@
   ss/pack!
   (show-events (ss/listbox))
   (type (ss/text))
-  (reset! *state {:todos {}})
+  (reset! *state {:todos {} :selected-todo nil})
   @*state)

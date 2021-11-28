@@ -12,7 +12,7 @@
 
 (defonce ^{:doc "Application state."}
   *state
-  (atom {:todos {} :selected-todo nil}))
+  (atom {:todos {}}))
 
 (def width  800)
 (def height 400)

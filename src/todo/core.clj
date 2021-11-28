@@ -140,12 +140,13 @@
     h-panel (ss/horizontal-panel :items [add-text add-btn])
     complete-button (ss/button :text "Complete"
                                :listen [:action (fn [x]
-                                                  (put! out-channel [::e/complete-task {:event x :state *state}])
-                                                  (swap!
-                                                   *state
-                                                   #(assoc-in % [:todos (get-selected-todo x) :complete?] true))
-                                                  (.setModel (select-first (get-frame x) :#todo-list)
-                                                             (create-list-model (:todos @*state))))])
+                                                  (let [todo (get-selected-todo x)]
+                                                    (put! out-channel [::e/complete-todo {:event x :state *state :todo todo}])
+                                                    (swap!
+                                                     *state
+                                                     #(assoc-in % [:todos todo :complete?] true))
+                                                    (.setModel (select-first (get-frame x) :#todo-list)
+                                                               (create-list-model (:todos @*state)))))])
     save-button (ss/button :text "Save" :listen [:action (fn [_] (spit "data.edn" @*state))])
     frame (ss/frame
            :minimum-size  [width :by height]

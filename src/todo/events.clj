@@ -10,3 +10,6 @@
 
 (defmethod handle-event ::note-added [[_ {:keys [new-note]}]]
   (println "note added" new-note))
+
+(defmethod handle-event ::complete-todo [[_ {:keys [todo]}]]
+  (println "task completed" todo))

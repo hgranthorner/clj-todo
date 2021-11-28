@@ -1,6 +1,6 @@
 (ns todo.core
   (:require [todo.events :as e]
-            [clojure.core.async :as async :refer (chan dropping-buffer go-loop put! <!)]
+            [clojure.core.async :as async :refer (chan dropping-buffer go-loop put! <! >!)]
             [seesaw.core :as ss]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -52,14 +52,11 @@
       (.addElement model k))
     model))
 
-(defn- remove-complete
-  "Remove the 'COMPLETE - ' prefix for completed todos."
-  [^String s]
-  (str/replace s "COMPLETE - " ""))
-
-(defn- set-notes [todos listbox]
+(defn- set-notes
+  "Set the content of the notes widget depending on the currently selected todo."
+  [todos listbox]
   (when (ss/selection listbox)
-    (let [selected-todo (remove-complete (ss/selection listbox))
+    (let [selected-todo (e/remove-complete (ss/selection listbox))
           notes (select-first (ss/to-root listbox) :#notes)
           new-note-text (:notes (todos selected-todo))]
       (ss/config! notes :text new-note-text))))
@@ -70,8 +67,8 @@
   (.getSource x))
 
 (comment
-  (remove-complete "abc")
-  (remove-complete "COMPLETE - abc"))
+  (e/remove-complete "abc")
+  (e/remove-complete "COMPLETE - abc"))
 
 (defn- get-frame
   "Gets the frame from an event."
@@ -87,7 +84,7 @@
       get-frame
       (select-first :#todo-list)
       ss/selection
-      remove-complete))
+      e/remove-complete))
 
 (comment
   (declare -main)
@@ -104,10 +101,7 @@
                      :listen [:selection
                               (fn [x]
                                 (when-not (.getValueIsAdjusting x)
-                                  (put! out-channel [::e/todo-selected {:event x :state *state :selected-todo (ss/selection (get-source x))}])
-                                  (let [listbox (get-source x)]
-                                    (ss/config! (select-first (ss/to-root listbox) :#notes) :editable? true)
-                                    (set-notes (:todos @*state) listbox))))])
+                                  (put! out-channel [::e/todo-selected {:event x :state @*state :selected-todo (ss/selection (get-source x))}])))])
     add-text (ss/text :id :add-text
                       :text ""
                       :editable? true
@@ -125,12 +119,12 @@
                               (let [frame (get-frame x)
                                     n (select-first frame :#notes)
                                     selected-todo (get-selected-todo x)]
-                                (put! out-channel [::e/note-written {:event x :state *state :note (.getText n)}])
+                                (put! out-channel [::e/note-written {:event x :state @*state :note (.getText n)}])
                                 (swap! *state #(assoc-in % [:todos selected-todo :notes] (.getText n)))))])
     add-fn (fn [x]
              (let [todo (ss/config add-text :text)
                    todos (:todos @*state)]
-               (put! out-channel [::e/note-added {:event x :state *state :new-note todo}])
+               (put! out-channel [::e/note-added {:event x :state @*state :new-note todo}])
                (if-not (contains? todos todo)
                  (do
                    (swap! *state #(assoc % :todos (conj todos [todo {:notes ""}])))
@@ -141,7 +135,7 @@
     complete-button (ss/button :text "Complete"
                                :listen [:action (fn [x]
                                                   (let [todo (get-selected-todo x)]
-                                                    (put! out-channel [::e/complete-todo {:event x :state *state :todo todo}])
+                                                    (put! out-channel [::e/complete-todo {:event x :state @*state :todo todo}])
                                                     (swap!
                                                      *state
                                                      #(assoc-in % [:todos todo :complete?] true))
@@ -181,9 +175,13 @@
     update-channel (chan (dropping-buffer 100))
     {:keys [frame] :as widgets} (create-widgets event-channel)]
     (go-loop []
-      (e/handle-event (<! event-channel))
-      ; Need to feed result of handle-event to update-channel
+      (>! update-channel (e/handle-event (<! event-channel)))
       (recur))
+    (go-loop [{:keys [update]} (<! update-channel)]
+      (doseq [[id new-values] (seq update)]
+        (doseq [[attribute value] (seq new-values)]
+          (ss/config! (select-first frame id) attribute value)))
+      (recur (<! update-channel)))
     (def ^:dynamic *frame frame)
     (-> frame
         ss/pack!
@@ -196,9 +194,16 @@
    :listen [:key-pressed (fn [_] (println "from config2"))])
   (-main)
   (:todos @*state)
+  (ss/config (select-first *frame :#notes) :text)
   (ss/selection (select-first *frame :#todo-list))
   ss/pack!
   (show-events (ss/listbox))
   (type (ss/text))
-  (reset! *state {:todos {} :selected-todo nil})
-  @*state)
+  (reset! *state {:todos {}})
+  (:selected-todo @*state)
+
+  (let [{:keys [update]} (e/handle-event [::e/todo-selected {:selected-todo "todo" :state @*state}])]
+    (for [[id new-values] (seq update)]
+      [id (seq new-values)]))
+  ; {:#notes {:editable? true, :text "I need to do this thing.\n\nI did it!"}}
+  ,,,)

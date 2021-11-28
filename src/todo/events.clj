@@ -3,7 +3,8 @@
 (defmulti handle-event first)
 
 (defmethod handle-event ::todo-selected [[_ {:keys [selected-todo]}]]
-  (println "Selected todo!" selected-todo))
+  (println "Selected todo!" selected-todo)
+  )
 
 (defmethod handle-event ::note-written [[_ {:keys [note]}]]
   (println "note written4" note))
